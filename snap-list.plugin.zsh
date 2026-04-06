@@ -163,11 +163,11 @@ function snap-list {
 
     # Step 2 — Filter
     echo -e "\n${BOLD}Step 2 — Filter:${RESET}"
-    echo -e "  ${CYAN}(enter)${RESET} none        — show all"
+    echo -e "  ${CYAN}(a)${RESET}     all         — show everything [default]"
     echo -e "  ${CYAN}(i)${RESET}     important   — protected snapshots only"
     echo -e "  ${CYAN}(s)${RESET}     single      — single type only"
     echo -e "  ${CYAN}(p)${RESET}     pre/post    — paired snapshots only"
-    printf "Choice : "
+    printf "Choice [a/i/s/p] (default: a) : "
     read -r filter_choice
 
     case "$filter_choice" in
