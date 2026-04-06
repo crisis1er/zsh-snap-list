@@ -141,6 +141,9 @@ function snap-list {
     echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
     echo -e "${CYAN}║${RESET}${BOLD}              Snap-List — SafeITExperts                       ${RESET}${CYAN}║${RESET}"
     echo -e "${CYAN}║${RESET}              Snapshot Viewer                                 ${CYAN}║${RESET}"
+    echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
+    echo -e "${CYAN}║${RESET}  Replaces ${BOLD}snapper list${RESET} — no options to memorize.             ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${RESET}  Filter by config, type or importance in one guided step.    ${CYAN}║${RESET}"
     echo -e "${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
 
     # Step 1 — Config
