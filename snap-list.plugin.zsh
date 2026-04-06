@@ -193,14 +193,38 @@ function snap-list {
         [[ ! "$filter_last" =~ ^[0-9]+$ ]] && filter_last=0
     fi
 
-    # Show equivalent command
-    local cmd="snap-list"
-    [[ "$all_configs" == "true" ]] && cmd+=" -a" || [[ "$config" != "root" ]] && cmd+=" -c $config"
-    [[ "$filter_important" == "true" ]] && cmd+=" -i"
-    [[ -n "$filter_type" ]] && cmd+=" -t $filter_type"
-    [[ "$filter_last" -gt 0 ]] && cmd+=" -n $filter_last"
+    # Build equivalent raw snapper command
+    local -a snapper_cmds
+    local -a target_eq
+    if [[ "$all_configs" == "true" ]]; then
+        target_eq=($(sudo snapper list-configs 2>/dev/null | awk 'NR>2 {print $1}'))
+    else
+        target_eq=("$config")
+    fi
 
-    echo -e "\n${CYAN}→ Equivalent command : ${BOLD}${cmd}${RESET}\n"
+    for cfg_eq in "${target_eq[@]}"; do
+        local raw_cmd="sudo snapper -c ${cfg_eq} list"
+        local pipes=""
+        if [[ "$filter_important" == "true" ]]; then
+            pipes+=' | grep "important=yes"'
+        fi
+        if [[ -n "$filter_type" ]]; then
+            case "$filter_type" in
+                single)   pipes+=' | grep "| single"' ;;
+                pre)      pipes+=' | grep "| pre"' ;;
+                post)     pipes+=' | grep "| post"' ;;
+                pre_post) pipes+=' | grep -E "| pre || post"' ;;
+            esac
+        fi
+        [[ "$filter_last" -gt 0 ]] && pipes+=" | tail -n ${filter_last}"
+        snapper_cmds+=("${raw_cmd}${pipes}")
+    done
+
+    echo -e "\n${YELLOW}Without snap-list you would type :${RESET}"
+    for c in "${snapper_cmds[@]}"; do
+        echo -e "  ${BOLD}${c}${RESET}"
+    done
+    echo ""
 
     _snap_list_run "$config" "$all_configs" "$filter_important" "$filter_type" "$filter_last"
 }
