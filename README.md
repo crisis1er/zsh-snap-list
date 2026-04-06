@@ -7,11 +7,27 @@
 
 # zsh-snap-list
 
-`sudo snapper list` outputs a raw table — all rows look identical, no filtering, one config at a time. To see only important snapshots you pipe to `grep`. To see the last 5 you pipe to `tail`. To see root and home together you run two commands. Each pipe breaks the colorization. There is no summary.
+`sudo snapper list` outputs a raw monochrome table. Every row looks the same — no visual distinction between the active snapshot, protected ones, or routine entries. Filtering requires piping to `grep` or `tail`, which breaks the table header. Viewing root and home requires two separate commands. There is no summary line.
 
-`snap-list` replaces this with a **guided menu** and **combinable flags** that do all of this natively — colorized, with a summary line that adapts to the filtered result.
+`snap-list` replaces all of this with a **3-step guided menu** — no options to memorize, no pipes, no syntax. The output is colorized, the summary adapts to the active filter, and after each menu session the equivalent raw `snapper` command is shown so you see exactly what you saved yourself from typing.
 
 Deployed and validated on a live openSUSE Tumbleweed system.
+
+---
+
+## Screenshots
+
+### Step 1 — Guided menu: config, filter, quantity
+
+No snapper knowledge required. Three choices and you're done.
+
+![snap-list — guided menu](assets/snap_list_choice.png)
+
+### Step 2 — Colorized result with summary line
+
+Green: active snapshot. Yellow: `important=yes` — protected from automatic cleanup. Summary line counts everything at a glance.
+
+![snap-list — colorized result and summary](assets/snap_list.png)
 
 ---
 
