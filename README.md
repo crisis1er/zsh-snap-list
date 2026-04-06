@@ -3,41 +3,108 @@
 ![Shell](https://img.shields.io/badge/shell-zsh%205.9%2B-blue)
 ![OMZ](https://img.shields.io/badge/Oh%20My%20Zsh-compatible-red)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Version](https://img.shields.io/badge/version-v1.0-orange)
+![Version](https://img.shields.io/badge/version-v2.0-orange)
 
 # zsh-snap-list
 
-`sudo snapper list` outputs a raw table — all rows look identical, making it hard to spot what matters at a glance: which snapshot is currently active, which ones are protected from automatic cleanup.
+`sudo snapper list` outputs a raw table — all rows look identical, no filtering, one config at a time. To see only important snapshots you pipe to `grep`. To see the last 5 you pipe to `tail`. To see root and home together you run two commands. Each pipe breaks the colorization. There is no summary.
 
-`snap-list` replaces that raw output with a **colorized view** and appends a **summary line** so you instantly know the state of your snapshots without reading every row.
+`snap-list` replaces this with a **guided menu** and **combinable flags** that do all of this natively — colorized, with a summary line that adapts to the filtered result.
 
 Deployed and validated on a live openSUSE Tumbleweed system.
 
 ---
 
+## Usage
+
+### Interactive menu — type `snap-list` with no argument
+
+A 3-step guided flow selects config, filter, and quantity. After selection, the **equivalent command is shown** so you learn the flags naturally.
+
+```
+╔══════════════════════════════════════════════════════════════╗
+║              Snap-List — SafeITExperts                       ║
+║              Snapshot Viewer                                 ║
+╚══════════════════════════════════════════════════════════════╝
+
+Step 1 — Config:
+  (r) root         [default]
+  (h) home
+  (a) all — root + home
+Choice [r/h/a] (default: r) :
+
+Step 2 — Filter:
+  (enter) none        — show all
+  (i)     important   — protected snapshots only
+  (s)     single      — single type only
+  (p)     pre/post    — paired snapshots only
+Choice :
+
+Step 3 — Quantity:
+  (enter) all snapshots
+  (n)     last N snapshots
+Choice :
+
+→ Equivalent command : snap-list -a -i -n 5
+```
+
+### Flag mode — direct execution
+
+Once you know the flags, skip the menu entirely:
+
+```zsh
+snap-list                        # interactive menu
+snap-list -a                     # root + home
+snap-list -i                     # important snapshots only
+snap-list -t single              # single type only
+snap-list -t pre_post            # pre and post only
+snap-list -n 5                   # last 5 snapshots
+snap-list -c home                # home config
+snap-list -h                     # help
+```
+
+### Combining flags
+
+```zsh
+snap-list -a -i                  # all configs, important only
+snap-list -n 10 -t single        # last 10 singles
+snap-list -c home -i -n 5        # last 5 importants on home
+snap-list -a -t pre_post         # all pre/post on all configs
+```
+
+Each combination that would require multiple commands or pipes with raw snapper runs here in a single call, with colorization and summary intact.
+
+---
+
 ## Features
 
-### Color-coded output
-Each row is colored based on its significance:
+### Interactive 3-step menu
+Config → Filter → Quantity. The equivalent flag command is printed at the end — the menu teaches itself out of existence.
 
+### Colorized output
 | Color | Meaning |
 |-------|---------|
 | **Green** | Active snapshot — currently mounted (`*`) |
-| **Yellow** | Protected snapshot — `important=yes`, exempt from automatic cleanup |
-| Bold | Header lines |
-| Default | Standard snapshots managed by timeline rotation |
+| **Yellow** | Protected — `important=yes`, exempt from automatic cleanup |
+| **Bold** | Header lines |
+| Default | Standard snapshots |
 
-### Summary line
-After the table, a single line gives a full count breakdown:
+### Multi-config view (`-a`)
+Displays root and home sequentially with a config separator. Requires two separate `snapper` commands otherwise.
 
+### Filtered summary line
+The summary adapts to whatever filter is active:
 ```
-Total : 30 snapshots — 18 singles, 6 pre, 6 post, 4 importants
+Total : 4 snapshots — 4 singles, 0 pre, 0 post, 4 importants
 ```
 
-No need to count rows manually.
+### Empty result guard
+When no snapshot matches the criteria, a clear message is shown instead of a blank table.
 
-### Full argument passthrough
-All arguments are forwarded to `snapper list`. Use `snap-list -c home` to list home snapshots, or any other snapper flag — the colorization and summary apply regardless.
+### Inline help (`-h`)
+```zsh
+snap-list -h
+```
 
 ---
 
@@ -47,20 +114,27 @@ All arguments are forwarded to `snapper list`. Use `snap-list -c home` to list h
 flowchart TD
     classDef plugin  fill:#1e3a5f,stroke:#93c5fd,stroke-width:2px,color:#ffffff
     classDef step    fill:#14532d,stroke:#86efac,stroke-width:2px,color:#ffffff
+    classDef confirm fill:#7f1d1d,stroke:#fca5a5,stroke-width:2px,color:#ffffff
     classDef output  fill:#78350f,stroke:#fcd34d,stroke-width:2px,color:#ffffff
     classDef note    fill:#1f2937,stroke:#4b5563,stroke-width:1px,color:#9ca3af
 
     P[zsh-snap-list]:::plugin
-    P --> R[snapper list]:::step
-    R --> C[awk colorizer]:::step
-    C --> O[Colorized table]:::output
-    O --> S[Summary line]:::output
+    P --> M{Args?}:::step
+    M -->|no args| Menu[Interactive menu]:::step
+    M -->|flags| Flags[Direct execution]:::step
+    Menu --> S1[Step 1 — Config]:::step
+    S1 --> S2[Step 2 — Filter]:::step
+    S2 --> S3[Step 3 — Quantity]:::step
+    S3 --> EQ[Show equivalent command]:::confirm
+    EQ --> RUN[_snap_list_run]:::output
+    Flags --> RUN
+    RUN --> OUT[Colorized table]:::output
+    OUT --> SUM[Summary line]:::output
 
-    P  -.-> NP[Oh My Zsh plugin — entry point, args passthrough]:::note
-    R  -.-> NR[sudo snapper list — all args forwarded]:::note
-    C  -.-> NC[Green: active / Yellow: important=yes / Bold: headers]:::note
-    O  -.-> NO[Same table as snapper list, color-coded]:::note
-    S  -.-> NS[Total, singles, pre, post, importants count]:::note
+    P   -.-> NP[Oh My Zsh plugin — menu or flags]:::note
+    RUN -.-> NR[Applies config / filter / last N then colorizes]:::note
+    EQ  -.-> NE[Teaches flags — menu becomes optional over time]:::note
+    SUM -.-> NS[Counts adapt to filtered result]:::note
 ```
 
 ---
@@ -96,34 +170,10 @@ source ~/.zshrc
 
 ---
 
-## Usage
-
-```zsh
-snap-list              # list root snapshots (default)
-snap-list -c home      # list home snapshots
-snap-list -c root      # explicit root
-```
-
-Example output:
-
-```
- # │ Type   │ Pre # │ Date                     │ User │ Used Space │ Cleanup  │ Description           │ Userdata
-───┼────────┼───────┼──────────────────────────┼──────┼────────────┼──────────┼───────────────────────┼──────────
- 0 │ single │       │                          │ root │            │          │ current               │
-28 │ single │       │ lun. 06 avril 2026 10:12  │ root │ 1.23 MiB   │ timeline │ Routine checkpoint    │
-29 │ single │       │ lun. 06 avril 2026 14:00  │ root │ 2.10 MiB   │ timeline │ Before config change  │ important=yes
-30 │ single │       │ lun. 06 avril 2026 15:29  │ root │  512 KiB   │ timeline │ Before system update  │ important=yes
-
-Total : 30 snapshots — 18 singles, 6 pre, 6 post, 4 importants
-```
-
-Row 0 (current) is green. Rows with `important=yes` are yellow. All others are default color.
-
----
-
 ## Design decisions
 
-- **Args passthrough** — `snap-list "$@"` forwards everything to snapper, no wrapping or filtering of flags
-- **awk colorizer** — single-pass, no subshell per line, works on any snapper output width
-- **Summary parsed from raw output** — counts are extracted before colorization to avoid ANSI interference
+- **Menu mode + flag mode** — guided for discovery, flags for speed once learned
+- **Equivalent command display** — the menu teaches itself away; users graduate to flags naturally
+- **`_snap_list_run` internal function** — clean separation between UI and execution logic
+- **Filters applied before colorization** — ANSI codes never interfere with grep patterns
 - **`function name { }` syntax** — prevents zsh alias/function conflicts on shell reload
