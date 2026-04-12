@@ -1,13 +1,20 @@
 # RELEASE — zsh-snap-list
 
-Version:  v2.0
-Date:     2026-04-06
+Version:  v3.0
+Date:     2026-04-12
 Platform: openSUSE Tumbleweed
 Shell:    zsh 5.9+
 
 ---
 
 ## What's in this release
+
+### v3.0 — Robust CSV parsing + config validation
+- Replaced `│`-based parsing with `snapper --csvout` — locale-independent
+- Colorization via `active`/`default` columns: green (+) = currently mounted, cyan (-) = default next boot
+- Config validation — error if snapper not configured or config missing
+- `snap-list -h` reminder shown after each output
+- Color legend added to help
 
 ### v2.0 — Interactive menu + combinable flags
 - Interactive 3-step menu: config (root/home/all), filter (none/important/single/pre_post), quantity (all/last N)

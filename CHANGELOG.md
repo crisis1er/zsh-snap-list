@@ -4,6 +4,17 @@ All notable changes to this plugin are documented here.
 
 ---
 
+## [3.0] — 2026-04-12
+
+### Changed
+- Replaced `│`-based parsing with `snapper --csvout --separator '|' --no-headers list --columns` — locale-independent, immune to Snapper rendering changes
+- Filters now apply on clean CSV fields (`awk -F'|'`) instead of fragile regex on Unicode borders
+- Colorization uses `active` and `default` columns — green (+) = currently mounted, cyan (-) = default next boot, yellow = important=yes
+- Config validation — explicit error message if snapper is not configured or config does not exist
+- Summary line counts computed from CSV data
+- Added `snap-list -h for options and color legend` hint after each output
+- Color legend added to `-h / --help` output
+
 ## [2.0] — 2026-04-06
 
 ### Added

@@ -1,6 +1,7 @@
 # ============================================================
 # zsh-snap-list — Oh My Zsh plugin for openSUSE Tumbleweed
 # Colorized snapper snapshot listing with filtering and menu
+# Version: 3.0 — 2026-04-12
 # ============================================================
 
 # Disable any residual alias or function that would shadow snap-list
@@ -17,6 +18,7 @@ function _snap_list_run {
     local GREEN="\033[32m" YELLOW="\033[33m" CYAN="\033[36m" BOLD="\033[1m" RESET="\033[0m"
     local RED="\033[31m"
 
+    # Fetch available configs once
     local -a cfgs
     if [[ "$all_configs" == "true" ]]; then
         cfgs=($(sudo snapper list-configs 2>/dev/null | awk 'NR>2 {print $1}'))
@@ -24,27 +26,41 @@ function _snap_list_run {
         cfgs=("$config")
     fi
 
+    # Guard: no snapper config found
+    if [[ ${#cfgs[@]} -eq 0 ]]; then
+        echo -e "${RED}No snapper configuration found.${RESET}"
+        echo -e "See: https://en.opensuse.org/openSUSE:Snapper_Tutorial"
+        return 1
+    fi
+
     local multi=false
     [[ ${#cfgs[@]} -gt 1 ]] && multi=true
 
     for cfg in "${cfgs[@]}"; do
-        local raw headers data
+        # Fetch CSV — locale-independent, stable columns
+        # Fields: $1=number $2=active $3=default $4=type $5=pre-number $6=date $7=description $8=userdata
+        local raw_csv
+        raw_csv=$(sudo snapper -c "$cfg" --csvout --separator '|' --no-headers list \
+            --columns number,active,default,type,pre-number,date,description,userdata 2>/dev/null)
 
-        raw=$(sudo snapper -c "$cfg" list 2>/dev/null)
-        headers=$(echo "$raw" | head -2)
-        data=$(echo "$raw" | tail -n +3 | grep "│")
+        if [[ -z "$raw_csv" ]]; then
+            echo -e "${RED}Error: config '${cfg}' not found or no snapshots available.${RESET}"
+            continue
+        fi
 
-        # Apply filters
+        # Apply filters on clean CSV fields
+        local data="$raw_csv"
+
         if [[ "$filter_important" == "true" ]]; then
-            data=$(echo "$data" | grep "important=yes" || true)
+            data=$(echo "$data" | awk -F'|' '$8 ~ /important=yes/')
         fi
 
         if [[ -n "$filter_type" ]]; then
             case "$filter_type" in
-                single)   data=$(echo "$data" | grep -E "│ single +│"         || true) ;;
-                pre)      data=$(echo "$data" | grep -E "│ pre +│"             || true) ;;
-                post)     data=$(echo "$data" | grep -E "│ post +│"            || true) ;;
-                pre_post) data=$(echo "$data" | grep -E "│ (pre|post) +│"      || true) ;;
+                single)   data=$(echo "$data" | awk -F'|' '$4=="single"') ;;
+                pre)      data=$(echo "$data" | awk -F'|' '$4=="pre"') ;;
+                post)     data=$(echo "$data" | awk -F'|' '$4=="post"') ;;
+                pre_post) data=$(echo "$data" | awk -F'|' '$4=="pre" || $4=="post"') ;;
             esac
         fi
 
@@ -55,33 +71,55 @@ function _snap_list_run {
         # Config separator when displaying multiple configs
         $multi && echo -e "\n${CYAN}${BOLD}── config: ${cfg} ─────────────────────────────────────────${RESET}"
 
+        # Header
+        printf "${BOLD}%-7s %-8s %-6s %-20s %-35s %s${RESET}\n" \
+            "Number" "Type" "Pre #" "Date" "Description" "Userdata"
+        printf '%.0s─' {1..100}; echo
+
         # Empty result guard
         if [[ -z "$(echo "$data" | grep -v '^$')" ]]; then
-            echo "$headers" | awk 'BEGIN{BOLD="\033[1m";RESET="\033[0m"} {print BOLD $0 RESET}'
             echo -e "${YELLOW}  No snapshots matching the selected criteria.${RESET}"
             echo ""
             continue
         fi
 
-        # Colorize output
-        { echo "$headers"; echo "$data"; } | awk '
-        BEGIN { GREEN="\033[32m"; YELLOW="\033[33m"; BOLD="\033[1m"; RESET="\033[0m" }
-        NR <= 2          { print BOLD $0 RESET; next }
-        /\*/             { print GREEN $0 RESET; next }
-        /important=yes/  { print YELLOW $0 RESET; next }
-        NF               { print }
-        '
+        # Colorize and print rows
+        echo "$data" | awk -F'|' \
+            -v GREEN="$GREEN" \
+            -v YELLOW="$YELLOW" \
+            -v CYAN="$CYAN" \
+            -v RESET="$RESET" '
+        {
+            num=$1; act=$2; def=$3; typ=$4; pre=$5; dat=$6; dsc=$7; udat=$8
 
-        # Summary line
-        local total single_c pre_c post_c imp_c
-        total=$(echo    "$data" | grep -c "│"             2>/dev/null || echo 0)
-        single_c=$(echo "$data" | grep -cE "│ single +│"  2>/dev/null || echo 0)
-        pre_c=$(echo    "$data" | grep -cE "│ pre +│"     2>/dev/null || echo 0)
-        post_c=$(echo   "$data" | grep -cE "│ post +│"    2>/dev/null || echo 0)
-        imp_c=$(echo    "$data" | grep -c "important=yes" 2>/dev/null || echo 0)
+            # Build number display with marker
+            marker=""
+            if (def=="yes") marker="+"
+            else if (act=="yes") marker="-"
+            num_display = num marker
+
+            # Determine color
+            color=RESET
+            if (def=="yes")                color=GREEN
+            else if (act=="yes")           color=CYAN
+            else if (udat~/important=yes/) color=YELLOW
+
+            printf color "%-7s %-8s %-6s %-20s %-35s %s" RESET "\n",
+                num_display, typ, pre, dat, dsc, udat
+        }'
 
         echo ""
-        echo "Total : ${total} snapshots — ${single_c} singles, ${pre_c} pre, ${post_c} post, ${imp_c} importants"
+
+        # Summary from CSV data
+        local total single_c pre_c post_c imp_c
+        total=$(echo    "$data" | grep -c '|' 2>/dev/null || echo 0)
+        single_c=$(echo "$data" | awk -F'|' '$4=="single"' | grep -c '|' || echo 0)
+        pre_c=$(echo    "$data" | awk -F'|' '$4=="pre"'    | grep -c '|' || echo 0)
+        post_c=$(echo   "$data" | awk -F'|' '$4=="post"'   | grep -c '|' || echo 0)
+        imp_c=$(echo    "$data" | awk -F'|' '$8~/important=yes/' | grep -c '|' || echo 0)
+
+        echo "Total: ${total} snapshots — ${single_c} singles, ${pre_c} pre, ${post_c} post, ${imp_c} important"
+        echo -e "  ${CYAN}snap-list -h${RESET} for options and color legend"
     done
 }
 
@@ -123,6 +161,10 @@ function snap-list {
                     echo -e "  ${CYAN}snap-list -a -i${RESET}              all configs, important only"
                     echo -e "  ${CYAN}snap-list -n 5 -t single${RESET}     last 5 singles"
                     echo -e "  ${CYAN}snap-list -c home -i -n 5${RESET}    last 5 importants on home"
+                    echo -e "\n  ${BOLD}Color legend:${RESET}"
+                    echo -e "  ${GREEN}Green (+)${RESET}   currently mounted snapshot"
+                    echo -e "  ${CYAN}Cyan (-)${RESET}    default for next boot"
+                    echo -e "  ${YELLOW}Yellow${RESET}      important=yes"
                     return 0 ;;
                 *)
                     echo -e "${RED}Unknown option: $1${RESET} — use ${BOLD}snap-list -h${RESET} for help"
@@ -136,6 +178,13 @@ function snap-list {
     # ── Interactive menu ──────────────────────────────────────
     local available_configs has_home=false
     available_configs=$(sudo snapper list-configs 2>/dev/null | awk 'NR>2 {print $1}' | tr '\n' ' ')
+
+    if [[ -z "$available_configs" ]]; then
+        echo -e "${RED}No snapper configuration found.${RESET}"
+        echo -e "See: https://en.opensuse.org/openSUSE:Snapper_Tutorial"
+        return 1
+    fi
+
     echo "$available_configs" | grep -q "home" && has_home=true
 
     echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
@@ -193,8 +242,7 @@ function snap-list {
         [[ ! "$filter_last" =~ ^[0-9]+$ ]] && filter_last=0
     fi
 
-    # Build equivalent raw snapper command
-    local -a snapper_cmds
+    # Build equivalent native snapper command for pedagogy
     local -a target_eq
     if [[ "$all_configs" == "true" ]]; then
         target_eq=($(sudo snapper list-configs 2>/dev/null | awk 'NR>2 {print $1}'))
@@ -202,6 +250,7 @@ function snap-list {
         target_eq=("$config")
     fi
 
+    local -a snapper_cmds
     for cfg_eq in "${target_eq[@]}"; do
         local raw_cmd="sudo snapper -c ${cfg_eq} list"
         local pipes=""
@@ -210,10 +259,10 @@ function snap-list {
         fi
         if [[ -n "$filter_type" ]]; then
             case "$filter_type" in
-                single)   pipes+=' | grep "| single"' ;;
+                single)   pipes+=' | grep "single"' ;;
                 pre)      pipes+=' | grep "| pre"' ;;
                 post)     pipes+=' | grep "| post"' ;;
-                pre_post) pipes+=' | grep -E "| pre || post"' ;;
+                pre_post) pipes+=' | grep -E "pre|post"' ;;
             esac
         fi
         [[ "$filter_last" -gt 0 ]] && pipes+=" | tail -n ${filter_last}"
