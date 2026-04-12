@@ -1,7 +1,7 @@
 # ============================================================
 # zsh-snap-list — Oh My Zsh plugin for openSUSE Tumbleweed
 # Colorized snapper snapshot listing with filtering and menu
-# Version: 3.0 — 2026-04-12
+# Version: 3.1 — 2026-04-12
 # ============================================================
 
 # Disable any residual alias or function that would shadow snap-list
@@ -18,10 +18,18 @@ function _snap_list_run {
     local GREEN="\033[32m" YELLOW="\033[33m" CYAN="\033[36m" BOLD="\033[1m" RESET="\033[0m"
     local RED="\033[31m"
 
+    # Detect whether sudo is required for snapper
+    local -a SNAPPER
+    if snapper list-configs &>/dev/null 2>&1; then
+        SNAPPER=(snapper)
+    else
+        SNAPPER=(sudo snapper)
+    fi
+
     # Fetch available configs once
     local -a cfgs
     if [[ "$all_configs" == "true" ]]; then
-        cfgs=($(sudo snapper list-configs 2>/dev/null | awk 'NR>2 {print $1}'))
+        cfgs=($("${SNAPPER[@]}" list-configs 2>/dev/null | awk 'NR>2 {print $1}'))
     else
         cfgs=("$config")
     fi
@@ -40,7 +48,7 @@ function _snap_list_run {
         # Fetch CSV — locale-independent, stable columns
         # Fields: $1=number $2=active $3=default $4=type $5=pre-number $6=date $7=description $8=userdata
         local raw_csv
-        raw_csv=$(sudo snapper -c "$cfg" --csvout --separator '|' --no-headers list \
+        raw_csv=$("${SNAPPER[@]}" -c "$cfg" --csvout --separator '|' --no-headers list \
             --columns number,active,default,type,pre-number,date,description,userdata 2>/dev/null)
 
         if [[ -z "$raw_csv" ]]; then
@@ -176,8 +184,15 @@ function snap-list {
     fi
 
     # ── Interactive menu ──────────────────────────────────────
+    local -a SNAPPER
+    if snapper list-configs &>/dev/null 2>&1; then
+        SNAPPER=(snapper)
+    else
+        SNAPPER=(sudo snapper)
+    fi
+
     local available_configs has_home=false
-    available_configs=$(sudo snapper list-configs 2>/dev/null | awk 'NR>2 {print $1}' | tr '\n' ' ')
+    available_configs=$("${SNAPPER[@]}" list-configs 2>/dev/null | awk 'NR>2 {print $1}' | tr '\n' ' ')
 
     if [[ -z "$available_configs" ]]; then
         echo -e "${RED}No snapper configuration found.${RESET}"
@@ -245,7 +260,7 @@ function snap-list {
     # Build equivalent native snapper command for pedagogy
     local -a target_eq
     if [[ "$all_configs" == "true" ]]; then
-        target_eq=($(sudo snapper list-configs 2>/dev/null | awk 'NR>2 {print $1}'))
+        target_eq=($("${SNAPPER[@]}" list-configs 2>/dev/null | awk 'NR>2 {print $1}'))
     else
         target_eq=("$config")
     fi

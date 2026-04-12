@@ -4,6 +4,11 @@ All notable changes to this plugin are documented here.
 
 ---
 
+## [3.1] — 2026-04-12
+
+### Changed
+- Auto-detect sudo requirement — uses `snapper` directly if user has access via ALLOW_USERS/ALLOW_GROUPS, falls back to `sudo snapper` otherwise
+
 ## [3.0] — 2026-04-12
 
 ### Changed

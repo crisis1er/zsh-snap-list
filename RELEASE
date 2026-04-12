@@ -1,6 +1,6 @@
 # RELEASE — zsh-snap-list
 
-Version:  v3.0
+Version:  v3.1
 Date:     2026-04-12
 Platform: openSUSE Tumbleweed
 Shell:    zsh 5.9+
@@ -8,6 +8,9 @@ Shell:    zsh 5.9+
 ---
 
 ## What's in this release
+
+### v3.1 — Auto sudo detection
+- Detects if sudo is required for snapper — compatible with ALLOW_USERS/ALLOW_GROUPS
 
 ### v3.0 — Robust CSV parsing + config validation
 - Replaced `│`-based parsing with `snapper --csvout` — locale-independent
