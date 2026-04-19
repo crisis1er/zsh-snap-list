@@ -4,6 +4,19 @@ All notable changes to this plugin are documented here.
 
 ---
 
+## [3.2] — 2026-04-19
+
+### Changed
+- Sudo detection uses `$EUID` check instead of running `snapper` — no unnecessary subprocess
+- `snapper list-configs` and `snapper list` called with `< /dev/null` — prevents TTY contention
+- All `read` prompts use `< /dev/tty` — safe when stdin is piped or redirected
+- Added `user` and `cleanup` columns to snapshot output — aligns with snapper CSV schema (10 fields)
+- Updated field indices: description = `$9`, userdata = `$10`
+- Column headers updated: `Number Type Pre# Date User Cleanup Description Userdata`
+- Display width extended from 100 to 110 characters
+
+---
+
 ## [3.1] — 2026-04-12
 
 ### Changed

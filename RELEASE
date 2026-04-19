@@ -1,13 +1,22 @@
 # RELEASE — zsh-snap-list
 
-Version:  v3.1
-Date:     2026-04-12
+Version:  v3.2
+Date:     2026-04-19
 Platform: openSUSE Tumbleweed
 Shell:    zsh 5.9+
 
 ---
 
 ## What's in this release
+
+### v3.2 — TTY safety + user/cleanup columns
+- Sudo detection via `$EUID` — no subprocess needed
+- `snapper list-configs` and `snapper list` called with `< /dev/null` — prevents TTY contention
+- All `read` prompts use `< /dev/tty` — safe when stdin is piped
+- Added `user` and `cleanup` columns to snapshot output (10-field CSV schema)
+- Updated field indices: description = `$9`, userdata = `$10`
+- Column headers: `Number Type Pre# Date User Cleanup Description Userdata`
+- Display width extended to 110 characters
 
 ### v3.1 — Auto sudo detection
 - Detects if sudo is required for snapper — compatible with ALLOW_USERS/ALLOW_GROUPS
