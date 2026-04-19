@@ -1,7 +1,7 @@
 # ============================================================
 # zsh-snap-list — Oh My Zsh plugin for openSUSE Tumbleweed
 # Colorized snapper snapshot listing with filtering and menu
-# Version: 3.1 — 2026-04-12
+# Version: 3.2 — 2026-04-18
 # ============================================================
 
 # Disable any residual alias or function that would shadow snap-list
@@ -18,9 +18,9 @@ function _snap_list_run {
     local GREEN="\033[32m" YELLOW="\033[33m" CYAN="\033[36m" BOLD="\033[1m" RESET="\033[0m"
     local RED="\033[31m"
 
-    # Detect whether sudo is required for snapper
+    # Detect whether sudo is required for snapper (EUID — no snapper call)
     local -a SNAPPER
-    if snapper list-configs &>/dev/null 2>&1; then
+    if [[ $EUID -eq 0 ]]; then
         SNAPPER=(snapper)
     else
         SNAPPER=(sudo snapper)
@@ -29,7 +29,7 @@ function _snap_list_run {
     # Fetch available configs once
     local -a cfgs
     if [[ "$all_configs" == "true" ]]; then
-        cfgs=($("${SNAPPER[@]}" list-configs 2>/dev/null | awk 'NR>2 {print $1}'))
+        cfgs=($("${SNAPPER[@]}" list-configs < /dev/null 2>/dev/null | awk 'NR>2 {print $1}'))
     else
         cfgs=("$config")
     fi
@@ -46,10 +46,11 @@ function _snap_list_run {
 
     for cfg in "${cfgs[@]}"; do
         # Fetch CSV — locale-independent, stable columns
-        # Fields: $1=number $2=active $3=default $4=type $5=pre-number $6=date $7=description $8=userdata
+        # Fields: $1=number $2=active $3=default $4=type $5=pre-number $6=date $7=user $8=cleanup $9=description $10=userdata
         local raw_csv
         raw_csv=$("${SNAPPER[@]}" -c "$cfg" --csvout --separator '|' --no-headers list \
-            --columns number,active,default,type,pre-number,date,description,userdata 2>/dev/null)
+            --columns number,active,default,type,pre-number,date,user,cleanup,description,userdata \
+            < /dev/null 2>/dev/null)
 
         if [[ -z "$raw_csv" ]]; then
             echo -e "${RED}Error: config '${cfg}' not found or no snapshots available.${RESET}"
@@ -60,7 +61,7 @@ function _snap_list_run {
         local data="$raw_csv"
 
         if [[ "$filter_important" == "true" ]]; then
-            data=$(echo "$data" | awk -F'|' '$8 ~ /important=yes/')
+            data=$(echo "$data" | awk -F'|' '$10 ~ /important=yes/')
         fi
 
         if [[ -n "$filter_type" ]]; then
@@ -80,9 +81,9 @@ function _snap_list_run {
         $multi && echo -e "\n${CYAN}${BOLD}── config: ${cfg} ─────────────────────────────────────────${RESET}"
 
         # Header
-        printf "${BOLD}%-7s %-8s %-6s %-20s %-35s %s${RESET}\n" \
-            "Number" "Type" "Pre #" "Date" "Description" "Userdata"
-        printf '%.0s─' {1..100}; echo
+        printf "${BOLD}%-7s %-8s %-6s %-20s %-12s %-12s %-30s %s${RESET}\n" \
+            "Number" "Type" "Pre #" "Date" "User" "Cleanup" "Description" "Userdata"
+        printf '%.0s─' {1..110}; echo
 
         # Empty result guard
         if [[ -z "$(echo "$data" | grep -v '^$')" ]]; then
@@ -98,7 +99,7 @@ function _snap_list_run {
             -v CYAN="$CYAN" \
             -v RESET="$RESET" '
         {
-            num=$1; act=$2; def=$3; typ=$4; pre=$5; dat=$6; dsc=$7; udat=$8
+            num=$1; act=$2; def=$3; typ=$4; pre=$5; dat=$6; usr=$7; cln=$8; dsc=$9; udat=$10
 
             # Build number display with marker
             marker=""
@@ -108,12 +109,12 @@ function _snap_list_run {
 
             # Determine color
             color=RESET
-            if (def=="yes")                color=GREEN
-            else if (act=="yes")           color=CYAN
-            else if (udat~/important=yes/) color=YELLOW
+            if (def=="yes")                 color=GREEN
+            else if (act=="yes")            color=CYAN
+            else if (udat~/important=yes/)  color=YELLOW
 
-            printf color "%-7s %-8s %-6s %-20s %-35s %s" RESET "\n",
-                num_display, typ, pre, dat, dsc, udat
+            printf color "%-7s %-8s %-6s %-20s %-12s %-12s %-30s %s" RESET "\n",
+                num_display, typ, pre, dat, usr, cln, dsc, udat
         }'
 
         echo ""
@@ -121,10 +122,10 @@ function _snap_list_run {
         # Summary from CSV data
         local total single_c pre_c post_c imp_c
         total=$(echo    "$data" | grep -c '|' 2>/dev/null || echo 0)
-        single_c=$(echo "$data" | awk -F'|' '$4=="single"' | grep -c '|' || echo 0)
-        pre_c=$(echo    "$data" | awk -F'|' '$4=="pre"'    | grep -c '|' || echo 0)
-        post_c=$(echo   "$data" | awk -F'|' '$4=="post"'   | grep -c '|' || echo 0)
-        imp_c=$(echo    "$data" | awk -F'|' '$8~/important=yes/' | grep -c '|' || echo 0)
+        single_c=$(echo "$data" | awk -F'|' '$4=="single"'  | grep -c '|' || echo 0)
+        pre_c=$(echo    "$data" | awk -F'|' '$4=="pre"'     | grep -c '|' || echo 0)
+        post_c=$(echo   "$data" | awk -F'|' '$4=="post"'    | grep -c '|' || echo 0)
+        imp_c=$(echo    "$data" | awk -F'|' '$10~/important=yes/' | grep -c '|' || echo 0)
 
         echo "Total: ${total} snapshots — ${single_c} singles, ${pre_c} pre, ${post_c} post, ${imp_c} important"
         echo -e "  ${CYAN}snap-list -h${RESET} for options and color legend"
@@ -185,14 +186,14 @@ function snap-list {
 
     # ── Interactive menu ──────────────────────────────────────
     local -a SNAPPER
-    if snapper list-configs &>/dev/null 2>&1; then
+    if [[ $EUID -eq 0 ]]; then
         SNAPPER=(snapper)
     else
         SNAPPER=(sudo snapper)
     fi
 
     local available_configs has_home=false
-    available_configs=$("${SNAPPER[@]}" list-configs 2>/dev/null | awk 'NR>2 {print $1}' | tr '\n' ' ')
+    available_configs=$("${SNAPPER[@]}" list-configs < /dev/null 2>/dev/null | awk 'NR>2 {print $1}' | tr '\n' ' ')
 
     if [[ -z "$available_configs" ]]; then
         echo -e "${RED}No snapper configuration found.${RESET}"
@@ -205,6 +206,7 @@ function snap-list {
     echo -e "${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
     echo -e "${CYAN}║${RESET}${BOLD}              Snap-List — SafeITExperts                       ${RESET}${CYAN}║${RESET}"
     echo -e "${CYAN}║${RESET}              Snapshot Viewer                                 ${CYAN}║${RESET}"
+    echo -e "${CYAN}║${RESET}              Version v3.2 — 2026-04-19                       ${CYAN}║${RESET}"
     echo -e "${CYAN}╠══════════════════════════════════════════════════════════════╣${RESET}"
     echo -e "${CYAN}║${RESET}  Replaces ${BOLD}snapper list${RESET} — no options to memorize.             ${CYAN}║${RESET}"
     echo -e "${CYAN}║${RESET}  Filter by config, type or importance in one guided step.    ${CYAN}║${RESET}"
@@ -220,7 +222,7 @@ function snap-list {
     else
         printf "Choice [r] (default: r) : "
     fi
-    read -r cfg_choice
+    read -r cfg_choice < /dev/tty
 
     case "$cfg_choice" in
         h|H) $has_home && config="home" || config="root" ;;
@@ -235,7 +237,7 @@ function snap-list {
     echo -e "  ${CYAN}(s)${RESET}     single      — single type only"
     echo -e "  ${CYAN}(p)${RESET}     pre/post    — paired snapshots only"
     printf "Choice [a/i/s/p] (default: a) : "
-    read -r filter_choice
+    read -r filter_choice < /dev/tty
 
     case "$filter_choice" in
         i|I) filter_important=true     ;;
@@ -249,18 +251,18 @@ function snap-list {
     echo -e "  ${CYAN}(enter)${RESET} all snapshots"
     echo -e "  ${CYAN}(n)${RESET}     last N snapshots"
     printf "Choice : "
-    read -r qty_choice
+    read -r qty_choice < /dev/tty
 
     if [[ "$qty_choice" =~ ^[nN]$ ]]; then
         printf "How many : "
-        read -r filter_last
+        read -r filter_last < /dev/tty
         [[ ! "$filter_last" =~ ^[0-9]+$ ]] && filter_last=0
     fi
 
     # Build equivalent native snapper command for pedagogy
     local -a target_eq
     if [[ "$all_configs" == "true" ]]; then
-        target_eq=($("${SNAPPER[@]}" list-configs 2>/dev/null | awk 'NR>2 {print $1}'))
+        target_eq=($("${SNAPPER[@]}" list-configs < /dev/null 2>/dev/null | awk 'NR>2 {print $1}'))
     else
         target_eq=("$config")
     fi
